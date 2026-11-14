@@ -1,0 +1,63 @@
+
+name: Build MiniWatts Vietnamese IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: xcode-27
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check source archive
+        run: |
+          test -f MiniWatts-VietHoa-source.zip
+
+      - name: Extract source
+        run: |
+          mkdir -p "$RUNNER_TEMP/miniwatts-source"
+          unzip -q MiniWatts-VietHoa-source.zip -d "$RUNNER_TEMP/miniwatts-source"
+          PROJECT_PATH="$(find "$RUNNER_TEMP/miniwatts-source" -name MiniWatts.xcodeproj -print -quit)"
+          test -n "$PROJECT_PATH"
+          echo "PROJECT_PATH=$PROJECT_PATH" >> "$GITHUB_ENV"
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          xcodebuild -list -project "$PROJECT_PATH"
+
+      - name: Build unsigned app
+        run: |
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme MiniWatts \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build
+
+      - name: Package IPA
+        run: |
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/MiniWatts.app"
+          test -d "$APP_PATH"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/ipa/Payload/"
+          cd "$RUNNER_TEMP/ipa"
+          zip -qry "$GITHUB_WORKSPACE/MiniWatts-Vietnamese-unsigned.ipa" Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiniWatts-Vietnamese-unsigned-IPA
+          path: MiniWatts-Vietnamese-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
